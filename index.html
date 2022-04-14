@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>javascript watermark 水印图片</title>
+  <style>
+    .item {
+      padding: 10px;
+      margin: 10px;
+      border-radius: 4px;
+      background: rgb(153 153 153 / 30%);
+    }
+
+    input[type="text"] {
+      padding: 2px 10px;
+    }
+
+    .hide {
+      display: none;
+    }
+
+    #run {
+      padding: 4px 10px;
+      border-radius: 4px;
+      color: #deebff;
+      background-color: #2684ff;
+      border: none;
+      cursor: pointer;
+    }
+
+    #run:hover {
+      color: #fafafa;
+      background-color: #549eff;
+    }
+  </style>
+</head>
+
+<body>
+  <div id="content">
+    <div id="imgContent">
+      <div class="item">
+        <label for="">上传原始图片:</label>
+        <input type="file" accept=".jpg,.png,.jpeg" name="" id="uploadFile">
+      </div>
+      <div class="item">
+        <label for="">原始图片链接地址: </label>
+        <input type="text" id="imgurl" />
+      </div>
+    </div>
+    <div id="watermarkContent">
+      <div class="item">
+        <label for="">水印位置:</label>
+        <select name="" id="select-position">
+          <option value="left-top">左上</option>
+          <option value="right-top">右上</option>
+          <option value="center">居中</option>
+          <option value="left-bottom">左下</option>
+          <option value="right-bottom">右下</option>
+        </select>
+      </div>
+      <div class="item">
+        <label for="">水印类型:</label>
+        <select name="" id="select-img" onchange="hangleChangeImgType(this)">
+          <option value="0">图片水印</option>
+          <option value="1">文字水印</option>
+        </select>
+      </div>
+      <div class="item" id="item0">
+        <label for="">水印图片:</label>
+        <input type="file" accept=".jpg,.png,.jpeg" name="" id="uploadWatermarkFile">
+      </div>
+      <div class="item hide" id="item1">
+        <label for="">水印文字:</label>
+        <input type="text" id="watermark-text" />
+        <label for="">水印文字大小:</label>
+        <input type="number" min="12" max="60" value="20" name="" id="text-size" />
+      </div>
+      <div class="item">
+        <button id="run" onclick="run()">预览并下载</button>
+      </div>
+    </div>
+    <div id="watermark-result">
+      <img id="waterMark" src="" alt="" />
+    </div>
+  </div>
+
+
+  <script>
+    // 切换水印类型
+    function hangleChangeImgType() {
+      var imgTypeVal = document.getElementById("select-img").value;
+      if (imgTypeVal == '0') {
+        document.getElementById("item0").classList = "item";
+        document.getElementById("item1").classList = "item hide";
+      }
+      if (imgTypeVal == '1') {
+        document.getElementById("item0").classList = "item hide";
+        document.getElementById("item1").classList = "item";
+      }
+    }
+  </script>
+  <script>
+    /**
+     * 图片路径转成canvas
+     * @param {图片url} url
+     */
+
+    async function imgToCanvas(url) {
+      // 创建img元素
+      var img = document.createElement("img");
+      img.src = url;
+      img.setAttribute("crossOrigin",
+        "anonymous"
+      ); // 防止跨域引起的 Failed to execute 'toDataURL' on 'HTMLCanvasElement': Tainted canvases may not be exported.
+      await new Promise((resolve, reject) => (img.onload = resolve, img.onerror = function(err) {
+        console.log(err);
+        alert("图片链接有误, 请重新填写!")
+      }));
+      // 创建canvas DOM元素，并设置其宽高和图片一样
+      var canvas = document.createElement("canvas");
+      canvas.width = img.width;
+      canvas.height = img.height;
+      // 坐标(0,0) 表示从此处开始绘制，相当于偏移。
+      canvas.getContext("2d").drawImage(img, 0, 0, img.width, img.height);
+      return canvas;
+    }
+
+    /**
+     * canvas添加水印
+     * @param {canvas对象} canvas
+     * @param {水印文字} text
+     */
+    async function addWatermark(canvas, text, markImg) {
+      var isBool = document.getElementById("select-img").value;
+      var fontSize = document.getElementById("text-size").value;
+      var markImgWidth = 0;
+      var markImgHeight = 0;
+      if (markImg) {
+        markImgWidth = markImg.width;
+        markImgHeight = markImg.height;
+      }
+      var ctx = canvas.getContext("2d");
+      ctx.fillStyle = "rgb(255, 0, 0)";
+      ctx.font = fontSize + "px 楷体";
+      ctx.textBaseline = "top";
+      var positionObj = positionUrl(canvas, markImgWidth, markImgHeight);
+      if (positionObj.textAlign == "center") {
+        ctx.textBaseline = "middle";
+      }
+      ctx.textAlign = positionObj.textAlign;
+      // 设置透明度值
+      // ctx.globalAlpha = 0.5
+      if (isBool == '0') {
+        ctx.drawImage(markImg, positionObj.left, positionObj.top, markImgWidth, markImgHeight);
+      }
+      if (isBool == '1') {
+        if (text == "") {
+          alert("请输入水印文字!")
+          return;
+        }
+        ctx.fillText(text, positionObj.left, positionObj.top);
+      }
+      return canvas;
+    }
+
+    /**
+     * canvas转成img
+     * @param {canvas对象} canvas
+     */
+    function convertCanvasToBlob(canvas) {
+      var format = "image/jpeg";
+      var base64 = canvas.toDataURL(format, 1);
+      document.getElementById("waterMark").src = base64;
+      var code = window.atob(base64.split(",")[1]);
+      var aBuffer = new window.ArrayBuffer(code.length);
+      var uBuffer = new window.Uint8Array(aBuffer);
+      for (var i = 0; i < code.length; i++) {
+        uBuffer[i] = code.charCodeAt(i);
+      }
+      return uBuffer;
+    }
+
+    function convasToImg(canvas, callback) {
+
+      // 新建Image对象，可以理解为DOM
+      canvas.toBlob(function (blob) {
+        var newImg = document.createElement("img"),
+          url = URL.createObjectURL(blob);
+        newImg.onload = function () {
+          // no longer need to read the blob so it's revoked
+          URL.revokeObjectURL(url);
+        };
+        newImg.src = url;
+        document.body.appendChild(newImg);
+
+      }, "image/jpg", 1);
+    }
+
+    // 将base64转换为文件
+    function dataURLtoFile(dataurl, filename) {
+      var arr = dataurl.split(','),
+        mime = arr[0].match(/:(.*?);/)[1],
+        bstr = atob(arr[1]),
+        n = bstr.length,
+        u8arr = new Uint8Array(n)
+      while (n--) {
+        u8arr[n] = bstr.charCodeAt(n)
+      }
+      return new File([u8arr], filename, {
+        type: mime
+      })
+    }
+
+    // 设置水印位置
+    function positionUrl(canvas, imgWidth, imgHeight) {
+      var isBool = document.getElementById("select-img").value;
+      var val = document.getElementById("select-position").value;
+      var canvasWidth = canvas.width;
+      var canvasHeight = canvas.height;
+      var position = {
+        left: 20,
+        top: 20,
+        textAlign: 'left'
+      };
+      if (isBool == '0') {
+        canvasWidth = canvasWidth - imgWidth;
+        canvasHeight = canvasHeight - imgHeight;
+      }
+      switch (val) {
+        case 'left-top':
+          position.left = 20;
+          position.top = 20;
+          position.textAlign = 'left';
+          break;
+        case 'right-top':
+          position.left = parseFloat(canvasWidth) - 20;
+          position.top = 20;
+          position.textAlign = 'right';
+          break;
+        case 'center':
+          position.left = parseFloat(canvasWidth) / 2;
+          position.top = parseFloat(canvasHeight) / 2;
+          position.textAlign = 'center';
+          break;
+        case 'left-bottom':
+          position.left = 20;
+          position.top = parseFloat(canvasHeight) - 20;
+          position.textAlign = 'left';
+          break;
+        case 'right-bottom':
+          position.left = parseFloat(canvasWidth) - 20;
+          position.top = parseFloat(canvasHeight) - 20;
+          position.textAlign = 'right';
+          break;
+      }
+      return position;
+    }
+
+    function downloadExportFile(blob, fileName, fileType) {
+      var downloadElement = document.createElement('a');
+      var href = blob;
+      if (typeof blob == 'string') {
+        downloadElement.target = '_blank';
+      } else {
+        href = window.URL.createObjectURL(blob); //创建下载的链接
+      }
+      downloadElement.href = href;
+      downloadElement.download = fileName + '.' + fileType; //下载后文件名
+      document.body.appendChild(downloadElement);
+      downloadElement.click(); //触发点击下载
+      document.body.removeChild(downloadElement); //下载完成移除元素
+      if (typeof blob != 'string') {
+        window.URL.revokeObjectURL(href); //释放掉blob对象
+      }
+    }
+
+    // 文件流转为img
+    function blobToImg(blob) {
+      return new Promise((resolve, reject) => {
+        var reader = new FileReader()
+        reader.addEventListener('load', () => {
+          var img = new Image()
+          img.src = reader.result
+          img.addEventListener('load', () => resolve(img))
+        })
+        reader.readAsDataURL(blob)
+      })
+    }
+
+    function imgBlodToCanvas(img) {
+      var canvas = document.createElement('canvas')
+      canvas.width = img.width
+      canvas.height = img.height
+      var ctx = canvas.getContext('2d')
+      ctx.drawImage(img, 0, 0)
+      return canvas
+    }
+
+
+    // 运行示例
+    async function run() {
+      var canvasImg = null;
+      var tempCanvas = null;
+      var canvasWatermarkImg = null;
+      var tempWatermarkCanvas = null;
+      var file = document.getElementById("uploadFile").files[0];
+      var watermarkFile = document.getElementById("uploadWatermarkFile").files[0];
+      var imgurl = document.getElementById("imgurl").value;
+      var watermarkText = document.getElementById("watermark-text").value;
+      if (file == undefined && imgurl == "") {
+        alert("请选择要加水印的图片");
+        return;
+      }
+      if (watermarkFile == undefined && watermarkText == "") {
+        alert("请选择水印图片或者填写水印文字");
+        return;
+      }
+      // 1. 原图转canvas
+      if (file) {
+        canvasImg = await blobToImg(file);
+        tempCanvas = imgBlodToCanvas(canvasImg);
+      }
+      if (file == undefined && imgurl) {
+        tempCanvas = await imgToCanvas(imgurl);
+      }
+      // 水印图转canvas
+      if (watermarkFile) {
+        canvasWatermarkImg = await blobToImg(watermarkFile);
+        tempWatermarkCanvas = imgBlodToCanvas(canvasWatermarkImg);
+      }
+      if (tempCanvas == undefined) {
+        return;
+      }
+      // 2.canvas添加水印
+      var canvas = await addWatermark(tempCanvas, watermarkText, tempWatermarkCanvas);
+      // 3.canvas转成img
+      var data = convertCanvasToBlob(canvas);
+      var blob = new Blob([data], {
+        type: 'image/png'
+      });
+      downloadExportFile(blob, "watermark-test", "png");
+    }
+  </script>
+</body>
+
+</html>
